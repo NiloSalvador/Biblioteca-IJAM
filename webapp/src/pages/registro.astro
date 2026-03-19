@@ -1,0 +1,202 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const { url } = Astro;
+const errorMsg = url.searchParams.get('error');
+
+import { supabaseServer } from '../lib/supabaseServer';
+const supabase = supabaseServer(Astro.cookies, Astro.request);
+const { data: { session } } = await supabase.auth.getSession();
+
+if (session) {
+  return Astro.redirect('/catalogo');
+}
+---
+
+<Layout title="Crear Cuenta">
+  <div class="flex flex-col lg:flex-row min-h-[calc(100vh-64px)]">
+    
+    <!-- Left branding panel -->
+    <div class="hidden lg:flex lg:w-5/12 gradient-primary relative overflow-hidden items-center justify-center p-12">
+      <!-- Glow effects -->
+      <div class="absolute top-0 right-0 w-[400px] h-[400px] bg-ijam-accent/8 rounded-full blur-[100px]"></div>
+      <div class="absolute bottom-0 left-0 w-[300px] h-[300px] bg-ijam-accent/5 rounded-full blur-[80px]"></div>
+      <!-- Dot pattern -->
+      <div class="absolute inset-0 opacity-5" style="background-image: radial-gradient(circle, rgba(255,255,255,0.3) 1px, transparent 1px); background-size: 24px 24px;"></div>
+      
+      <div class="relative z-10 text-center max-w-sm">
+        <div class="w-16 h-16 bg-ijam-accent rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-lg shadow-ijam-accent/25">
+          <svg class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+        </div>
+        <h2 class="text-3xl font-bold text-white mb-4 leading-tight">
+          Únete a la
+          <span class="block text-ijam-accent">Biblioteca IJAM</span>
+        </h2>
+        <p class="text-white/60 leading-relaxed">
+          Crea tu cuenta para acceder a toda nuestra colección de recursos académicos y literatura profesional.
+        </p>
+        <div class="mt-10 flex items-center justify-center gap-6 text-sm text-white/40">
+          <div class="flex items-center gap-2">
+            <div class="w-2 h-2 rounded-full bg-ijam-success animate-pulse"></div>
+            Registro abierto
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right form panel -->
+    <div class="flex-1 flex items-center justify-center px-6 py-12 lg:px-16 bg-white">
+      <div class="w-full max-w-md">
+        <!-- Mobile logo -->
+        <div class="lg:hidden text-center mb-8">
+          <div class="w-12 h-12 bg-ijam-accent rounded-xl flex items-center justify-center mx-auto mb-4 shadow-md shadow-ijam-accent/20">
+            <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+          </div>
+          <h2 class="text-xl font-bold text-ijam-primary">Biblioteca <span class="text-ijam-accent">IJAM</span></h2>
+        </div>
+
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-ijam-primary mb-2">Crear Cuenta</h1>
+          <p class="text-ijam-text-muted text-sm">Regístrate para acceder a la biblioteca</p>
+        </div>
+
+        {errorMsg && (
+          <div class="bg-red-50 border-l-4 border-ijam-danger text-red-700 p-4 mb-6 text-sm flex gap-2 items-center rounded-r-md">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+            {errorMsg}
+          </div>
+        )}
+
+        <form id="registerForm" action="/api/auth/signup" method="POST" class="space-y-5">
+          <div>
+            <label for="full_name" class="block text-sm font-semibold text-ijam-text mb-1.5">Nombre Completo</label>
+            <input 
+              type="text" 
+              name="full_name" 
+              id="full_name" 
+              placeholder="Juan Pérez García"
+              class="block w-full px-4 py-3 bg-ijam-surface border border-ijam-surface-alt rounded-lg focus:ring-2 focus:ring-ijam-accent/50 focus:border-ijam-accent transition-all text-ijam-text"
+              required 
+            />
+          </div>
+
+          <div>
+            <label for="email" class="block text-sm font-semibold text-ijam-text mb-1.5">Correo Institucional</label>
+            <input 
+              type="email" 
+              name="email" 
+              id="email" 
+              placeholder="ejemplo@ijamvirtual.edu.pe"
+              class="block w-full px-4 py-3 bg-ijam-surface border border-ijam-surface-alt rounded-lg focus:ring-2 focus:ring-ijam-accent/50 focus:border-ijam-accent transition-all text-ijam-text"
+              required 
+            />
+          </div>
+
+          <div>
+            <label for="role" class="block text-sm font-semibold text-ijam-text mb-1.5">Tipo de Usuario</label>
+            <select 
+              name="role" 
+              id="role" 
+              class="block w-full px-4 py-3 bg-ijam-surface border border-ijam-surface-alt rounded-lg focus:ring-2 focus:ring-ijam-accent/50 focus:border-ijam-accent transition-all text-ijam-text"
+              required
+            >
+              <option value="STUDENT">Estudiante</option>
+              <option value="TEACHER">Docente</option>
+              <option value="STAFF">Administrativo</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="password" class="block text-sm font-semibold text-ijam-text mb-1.5">Contraseña</label>
+            <input 
+              type="password" 
+              name="password" 
+              id="password" 
+              placeholder="Mínimo 6 caracteres"
+              minlength="6"
+              class="block w-full px-4 py-3 bg-ijam-surface border border-ijam-surface-alt rounded-lg focus:ring-2 focus:ring-ijam-accent/50 focus:border-ijam-accent transition-all text-ijam-text"
+              required 
+            />
+          </div>
+
+          <div>
+            <label for="confirm_password" class="block text-sm font-semibold text-ijam-text mb-1.5">Confirmar Contraseña</label>
+            <input 
+              type="password" 
+              name="confirm_password" 
+              id="confirm_password" 
+              placeholder="Repite tu contraseña"
+              minlength="6"
+              class="block w-full px-4 py-3 bg-ijam-surface border border-ijam-surface-alt rounded-lg focus:ring-2 focus:ring-ijam-accent/50 focus:border-ijam-accent transition-all text-ijam-text"
+              required 
+            />
+          </div>
+
+          <p id="formError" class="text-ijam-danger text-sm hidden"></p>
+
+          <button 
+            type="submit" 
+            class="w-full flex justify-center py-3.5 px-4 text-sm font-bold text-ijam-primary bg-ijam-accent hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ijam-accent rounded-lg transition-all duration-200 mt-8 shadow-md shadow-ijam-accent/20 hover:shadow-lg hover:shadow-ijam-accent/30 hover:-translate-y-0.5"
+          >
+            Crear mi Cuenta
+          </button>
+        </form>
+
+        <p class="mt-6 text-center text-sm text-ijam-text-muted">
+          ¿Ya tienes cuenta?
+          <a href="/login" class="font-semibold text-ijam-accent hover:brightness-110 hover:underline ml-1">Inicia sesión</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('registerForm');
+    const errorEl = document.getElementById('formError');
+
+    form?.addEventListener('submit', (e) => {
+      const fullName = (document.getElementById('full_name') as HTMLInputElement).value.trim();
+      const email = (document.getElementById('email') as HTMLInputElement).value.trim();
+      const password = (document.getElementById('password') as HTMLInputElement).value;
+      const confirmPassword = (document.getElementById('confirm_password') as HTMLInputElement).value;
+
+      errorEl?.classList.add('hidden');
+
+      if (!fullName) {
+        e.preventDefault();
+        showError('El nombre completo es obligatorio');
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        e.preventDefault();
+        showError('Ingresa un correo electrónico válido');
+        return;
+      }
+
+      if (password.length < 6) {
+        e.preventDefault();
+        showError('La contraseña debe tener al menos 6 caracteres');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        e.preventDefault();
+        showError('Las contraseñas no coinciden');
+        return;
+      }
+    });
+
+    function showError(msg: string) {
+      if (errorEl) {
+        errorEl.textContent = msg;
+        errorEl.classList.remove('hidden');
+      }
+    }
+  });
+</script>

@@ -1,0 +1,87 @@
+---
+import { supabaseServer } from '../../lib/supabaseServer';
+import PDFViewer from '../../components/PDFViewer';
+
+const { id } = Astro.params;
+const supabase = supabaseServer(Astro.cookies, Astro.request);
+
+// 1. Validar Sesión
+const { data: { session } } = await supabase.auth.getSession();
+if (!session) {
+  return Astro.redirect('/login');
+}
+
+// 2. Validar que el usuario tenga este préstamo activo y que sea del tipo correcto
+const { data: rawLoan, error: loanError } = await supabase
+  .from('loans')
+  .select(`
+    id,
+    book_id,
+    status,
+    books (
+      title,
+      resource_url,
+      type
+    )
+  `)
+  .eq('id', id)
+  .eq('user_id', session.user.id)
+  .single();
+
+
+// Workaround for Supabase JOIN typing
+const loan = rawLoan as unknown as {
+  id: string,
+  book_id: string,
+  status: string,
+  books: {
+    title: string,
+    resource_url: string,
+    type: string
+  }
+};
+
+if (loanError || !loan || loan.status !== 'ACTIVE' || loan.books?.type !== 'VIRTUAL') {
+  return Astro.redirect('/mis-prestamos?error=Préstamo no válido o expirado');
+}
+
+// 3. Generar URL firmada temporal (expira en 1 hora por seguridad, ideal para streaming de lectura)
+// Asumiendo que resource_url guarda la ruta dentro del bucket 'pdfs' (ej: 'theology/book1.pdf')
+
+let signedUrl = '';
+
+if (loan.books?.resource_url) {
+  const { data, error } = await supabase
+    .storage
+    .from('pdfs') // Nombre del bucket seguro
+    .createSignedUrl(loan.books.resource_url, 3600); // 1 hr de expiración
+
+
+  if (!error && data) {
+    signedUrl = data.signedUrl;
+  }
+}
+
+// Para propósitos de este demo en caso de no tener PDFs reales subidos:
+if (!signedUrl) {
+  signedUrl = 'https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf';
+}
+
+---
+
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor: {loan.books.title}</title>
+</head>
+<body class="bg-slate-900 m-0 p-0 h-screen overflow-hidden text-slate-100 font-sans">
+  
+    <PDFViewer 
+      client:only="react" 
+      url={signedUrl} 
+      title={loan.books.title} 
+    />
+
+</body>
+</html>

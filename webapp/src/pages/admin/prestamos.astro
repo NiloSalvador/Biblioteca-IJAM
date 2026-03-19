@@ -1,0 +1,355 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { supabaseServer } from '../../lib/supabaseServer';
+import { Search, ChevronLeft, ChevronRight, AlertTriangle, CheckCircle, BookOpen, FileText } from 'lucide-react';
+
+const supabase = supabaseServer(Astro.cookies, Astro.request);
+
+// 1. Verificar sesión y rol ADMIN
+const { data: { session } } = await supabase.auth.getSession();
+if (!session) return Astro.redirect('/login');
+
+const { data: profile } = await supabase.from('users').select('role').eq('id', session.user.id).single();
+if (profile?.role !== 'ADMIN') return Astro.redirect('/');
+
+// 2. Consultar todos los préstamos con JOIN
+const { data: loans, error } = await supabase
+  .from('loans')
+  .select(`
+    id, status, loan_date, due_date, return_date, created_at,
+    users ( id, full_name, institutional_email, role ),
+    books ( id, title, type )
+  `)
+  .order('created_at', { ascending: false });
+
+const validLoans = loans || [];
+
+// 3. Métricas
+const totalLoans = validLoans.length;
+const activeLoans = validLoans.filter(l => l.status === 'ACTIVE').length;
+const reservedLoans = validLoans.filter(l => l.status === 'RESERVED').length;
+const overdueLoans = validLoans.filter(l => l.status === 'OVERDUE').length;
+const returnedLoans = validLoans.filter(l => l.status === 'RETURNED').length;
+
+const url = Astro.url;
+const successMsg = url.searchParams.get('success');
+const errorMsg = url.searchParams.get('error');
+
+// Helpers for UI
+const getStatusConfig = (status: string) => {
+  switch (status) {
+    case 'ACTIVE': return { bg: 'bg-ijam-success/10', text: 'text-ijam-success', border: 'border-ijam-success/20', label: 'Activo' };
+    case 'RESERVED': return { bg: 'bg-ijam-warning/10', text: 'text-ijam-warning', border: 'border-ijam-warning/20', label: 'Reservado' };
+    case 'OVERDUE': return { bg: 'bg-ijam-danger/10', text: 'text-ijam-danger', border: 'border-ijam-danger/20', label: 'Vencido' };
+    case 'RETURNED': return { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200', label: 'Devuelto' };
+    default: return { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200', label: status };
+  }
+};
+
+const getRoleLabel = (role: string) => {
+  switch (role) {
+    case 'STUDENT': return 'Estudiante';
+    case 'TEACHER': return 'Docente';
+    case 'STAFF': return 'Admin.';
+    case 'ADMIN': return 'SuperAdmin';
+    default: return role;
+  }
+};
+---
+
+<Layout title="Gestión de Préstamos | Admin">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 pt-24 mb-10">
+    
+    <div class="mb-8 relative">
+      <a href="/admin/dashboard" class="inline-flex items-center gap-2 text-sm text-ijam-text-muted hover:text-ijam-accent transition-colors mb-4 border border-ijam-surface-alt px-3 py-1.5 rounded-full bg-white shadow-sm">
+        <ChevronLeft className="w-4 h-4" />
+        Volver al Dashboard
+      </a>
+      <h1 class="text-3xl font-bold text-ijam-text tracking-tight">Gestión de Préstamos</h1>
+      <p class="text-ijam-text-muted mt-1">Administra todas las solicitudes y devoluciones del sistema.</p>
+    </div>
+
+    {successMsg && (
+      <div class="bg-ijam-success/10 border border-ijam-success/20 text-ijam-success px-4 py-3 rounded-xl mb-6 flex items-center gap-2 shadow-sm">
+        <CheckCircle className="w-5 h-5" />
+        <span class="text-sm font-medium">{successMsg}</span>
+      </div>
+    )}
+    {errorMsg && (
+      <div class="bg-ijam-danger/10 border border-ijam-danger/20 text-ijam-danger px-4 py-3 rounded-xl mb-6 flex items-center gap-2 shadow-sm">
+        <AlertTriangle className="w-5 h-5" />
+        <span class="text-sm font-medium">{errorMsg}</span>
+      </div>
+    )}
+
+    <!-- 3. Cards de Métricas -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+      <div class="bg-white border text-center p-4 rounded-xl shadow-sm hover:shadow-md transition-base cursor-default">
+        <p class="text-sm font-medium text-ijam-text-muted">Total Préstamos</p>
+        <p class="text-2xl font-bold text-ijam-primary">{totalLoans}</p>
+      </div>
+      <div class="bg-white border-b-4 border-ijam-success text-center p-4 rounded-xl shadow-sm hover:shadow-md transition-base cursor-default">
+        <p class="text-sm font-medium text-ijam-text-muted">Activos</p>
+        <p class="text-2xl font-bold text-ijam-success">{activeLoans}</p>
+      </div>
+      <div class="bg-white border-b-4 border-ijam-warning text-center p-4 rounded-xl shadow-sm hover:shadow-md transition-base cursor-default">
+        <p class="text-sm font-medium text-ijam-text-muted">Reservados</p>
+        <p class="text-2xl font-bold text-ijam-warning">{reservedLoans}</p>
+      </div>
+      <div class="bg-white border-b-4 border-ijam-danger text-center p-4 rounded-xl shadow-sm hover:shadow-md transition-base cursor-default">
+        <p class="text-sm font-medium text-ijam-text-muted">Vencidos</p>
+        <p class="text-2xl font-bold text-ijam-danger">{overdueLoans}</p>
+      </div>
+      <div class="bg-white border-b-4 border-slate-400 text-center p-4 rounded-xl shadow-sm hover:shadow-md transition-base cursor-default">
+        <p class="text-sm font-medium text-ijam-text-muted">Devueltos</p>
+        <p class="text-2xl font-bold text-slate-600">{returnedLoans}</p>
+      </div>
+    </div>
+
+    <!-- 4. Filtros -->
+    <div class="bg-white border border-slate-200 p-5 rounded-xl shadow-sm mb-6 flex flex-col md:flex-row gap-4 items-end">
+      <div class="w-full md:w-1/3">
+        <label class="block text-xs font-semibold text-ijam-text-muted uppercase tracking-wider mb-2">Buscador</label>
+        <div class="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input type="text" id="searchInput" placeholder="Usuario o título de libro..." class="w-full pl-9 pr-3 py-2 bg-ijam-surface border border-ijam-surface-alt rounded-lg text-sm focus:ring-2 focus:ring-ijam-accent focus:border-ijam-accent outline-none transition-all" />
+        </div>
+      </div>
+      
+      <div class="w-full md:w-1/6">
+        <label class="block text-xs font-semibold text-ijam-text-muted uppercase tracking-wider mb-2">Estado</label>
+        <select id="statusFilter" class="w-full px-3 py-2 bg-ijam-surface border border-ijam-surface-alt rounded-lg text-sm focus:ring-2 focus:ring-ijam-accent outline-none cursor-pointer">
+          <option value="">Todos</option>
+          <option value="ACTIVE">Activos</option>
+          <option value="RESERVED">Reservados</option>
+          <option value="OVERDUE">Vencidos</option>
+          <option value="RETURNED">Devueltos</option>
+        </select>
+      </div>
+
+      <div class="w-full md:w-1/6">
+        <label class="block text-xs font-semibold text-ijam-text-muted uppercase tracking-wider mb-2">Tipo</label>
+        <select id="typeFilter" class="w-full px-3 py-2 bg-ijam-surface border border-ijam-surface-alt rounded-lg text-sm focus:ring-2 focus:ring-ijam-accent outline-none cursor-pointer">
+          <option value="">Ambos</option>
+          <option value="VIRTUAL">Virtual</option>
+          <option value="PHYSICAL">Físico</option>
+        </select>
+      </div>
+
+      <div class="w-full md:w-1/6">
+        <label class="block text-xs font-semibold text-ijam-text-muted uppercase tracking-wider mb-2">Rol Usuario</label>
+        <select id="roleFilter" class="w-full px-3 py-2 bg-ijam-surface border border-ijam-surface-alt rounded-lg text-sm focus:ring-2 focus:ring-ijam-accent outline-none cursor-pointer">
+          <option value="">Todos</option>
+          <option value="STUDENT">Estudiante</option>
+          <option value="TEACHER">Docente</option>
+          <option value="STAFF">Administrativo</option>
+        </select>
+      </div>
+
+      <div class="w-full md:w-1/4">
+        <label class="block text-xs font-semibold text-ijam-text-muted uppercase tracking-wider mb-2">Por Fecha</label>
+        <input type="date" id="dateFilter" class="w-full px-3 py-2 bg-ijam-surface border border-ijam-surface-alt rounded-lg text-sm focus:ring-2 focus:ring-ijam-accent outline-none cursor-pointer text-ijam-text-muted" />
+      </div>
+    </div>
+
+    <!-- 5. Tabla de Préstamos -->
+    <div class="bg-white rounded-xl shadow-card overflow-hidden border border-slate-200">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead class="text-xs text-ijam-text uppercase bg-ijam-surface border-b border-slate-200">
+            <tr>
+              <th scope="col" class="px-5 py-4 font-bold">Usuario</th>
+              <th scope="col" class="px-5 py-4 font-bold">Libro</th>
+              <th scope="col" class="px-5 py-4 font-bold">Fechas</th>
+              <th scope="col" class="px-5 py-4 font-bold text-center">Estado</th>
+              <th scope="col" class="px-5 py-4 font-bold text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="loansTableBody">
+            {validLoans.map((loan) => {
+              const u = Array.isArray(loan.users) ? loan.users[0] : loan.users;
+              const b = Array.isArray(loan.books) ? loan.books[0] : loan.books;
+              const statusCfg = getStatusConfig(loan.status);
+              const isVirtual = b?.type === 'VIRTUAL';
+
+              return (
+              <tr class="loan-row bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                  data-status={loan.status}
+                  data-type={b?.type}
+                  data-role={u?.role}
+                  data-user={u?.full_name?.toLowerCase()}
+                  data-book={b?.title?.toLowerCase()}
+                  data-date={loan.loan_date ? loan.loan_date.split('T')[0] : ''}>
+                <td class="px-5 py-4">
+                  <div class="flex flex-col">
+                    <span class="font-bold text-ijam-primary line-clamp-1" title={u?.full_name}>{u?.full_name || 'Desconocido'}</span>
+                    <span class="text-xs text-ijam-text-muted line-clamp-1">{u?.institutional_email}</span>
+                    <span class="text-[0.65rem] font-bold uppercase tracking-wider text-ijam-accent mt-1">{getRoleLabel(u?.role || 'ESTUDIANTE')}</span>
+                  </div>
+                </td>
+                <td class="px-5 py-4 max-w-[200px]">
+                  <div class="flex flex-col">
+                    <span class="font-semibold text-ijam-text line-clamp-2" title={b?.title}>{b?.title || 'Libro Desconocido'}</span>
+                    <div class="mt-1 flex items-center gap-1 text-[0.65rem] font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200 w-max">
+                      {isVirtual ? <FileText className="w-3 h-3 text-ijam-accent" /> : <BookOpen className="w-3 h-3 text-ijam-primary" />}
+                      {isVirtual ? 'VIRTUAL' : 'FÍSICO'}
+                    </div>
+                  </div>
+                </td>
+                <td class="px-5 py-4">
+                  <div class="flex flex-col text-xs space-y-1">
+                    <div class="flex gap-2"><span class="w-16 text-slate-400">Préstamo:</span> <span class="font-medium text-ijam-text">{new Date(loan.loan_date).toLocaleDateString('es-ES')}</span></div>
+                    {loan.due_date && <div class="flex gap-2"><span class="w-16 text-slate-400">Vence:</span> <span class="font-medium text-slate-700">{new Date(loan.due_date).toLocaleDateString('es-ES')}</span></div>}
+                    {loan.return_date && <div class="flex gap-2"><span class="w-16 text-slate-400">Devolvió:</span> <span class="font-medium text-ijam-success">{new Date(loan.return_date).toLocaleDateString('es-ES')}</span></div>}
+                  </div>
+                </td>
+                <td class="px-5 py-4 text-center align-middle">
+                  <span class={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full border ${statusCfg.bg} ${statusCfg.text} ${statusCfg.border} whitespace-nowrap`}>
+                    {statusCfg.label}
+                  </span>
+                </td>
+                <td class="px-5 py-4 text-center">
+                  <div class="flex flex-wrap items-center justify-center gap-2">
+                    {/* Active/Overdue -> Marcar Devuelto */}
+                    {(loan.status === 'ACTIVE' || loan.status === 'OVERDUE') && (
+                      <form action="/api/admin/loans/return" method="POST" class="inline">
+                        <input type="hidden" name="loan_id" value={loan.id} />
+                        <button type="submit" class="px-3 py-1.5 bg-ijam-text hover:bg-black text-white text-[0.7rem] font-bold rounded-md shadow-sm transition-all" title="Registrar como devuelto">
+                          Devolver
+                        </button>
+                      </form>
+                    )}
+                    {/* Reserved -> Activar Préstamo */}
+                    {loan.status === 'RESERVED' && (
+                      <form action="/api/admin/loans/activate" method="POST" class="inline">
+                        <input type="hidden" name="loan_id" value={loan.id} />
+                        <button type="submit" class="px-3 py-1.5 bg-ijam-success hover:brightness-110 text-white text-[0.7rem] font-bold rounded-md shadow-sm transition-all" title="Aprobar préstamo reservado y fijar fecha de entrega">
+                          Activar
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            )})}
+            {validLoans.length === 0 && (
+              <tr><td colspan="5" class="px-5 py-10 text-center text-ijam-text-muted">No hay préstamos registrados en el sistema.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 7. Paginación -->
+      <div class="px-5 py-4 border-t border-slate-200 bg-ijam-surface/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <span class="text-sm text-ijam-text-muted" id="paginationInfo">Mostrando 0 - 0 de 0 préstamos</span>
+        <div class="flex gap-2">
+          <button id="prevPage" class="px-3 py-1.5 border border-slate-300 rounded-md bg-white text-ijam-text-muted hover:bg-slate-50 hover:text-ijam-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center gap-1">
+            <ChevronLeft className="w-4 h-4" /> Anterior
+          </button>
+          <button id="nextPage" class="px-3 py-1.5 border border-slate-300 rounded-md bg-white text-ijam-text-muted hover:bg-slate-50 hover:text-ijam-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center gap-1">
+            Siguiente <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Filtering and Pagination Logic
+    document.addEventListener('DOMContentLoaded', () => {
+      const searchInput = document.getElementById('searchInput') as HTMLInputElement;
+      const statusFilter = document.getElementById('statusFilter') as HTMLSelectElement;
+      const typeFilter = document.getElementById('typeFilter') as HTMLSelectElement;
+      const roleFilter = document.getElementById('roleFilter') as HTMLSelectElement;
+      const dateFilter = document.getElementById('dateFilter') as HTMLInputElement;
+
+      const prevPageBtn = document.getElementById('prevPage') as HTMLButtonElement;
+      const nextPageBtn = document.getElementById('nextPage') as HTMLButtonElement;
+      const paginationInfo = document.getElementById('paginationInfo') as HTMLSpanElement;
+
+      const rows = Array.from(document.querySelectorAll('.loan-row')) as HTMLElement[];
+      const itemsPerPage = 20;
+      let currentPage = 1;
+      let filteredRows: HTMLElement[] = [];
+
+      function applyFilters() {
+        const searchVal = searchInput.value.toLowerCase();
+        const statusVal = statusFilter.value;
+        const typeVal = typeFilter.value;
+        const roleVal = roleFilter.value;
+        const dateVal = dateFilter.value;
+
+        filteredRows = rows.filter(row => {
+          const rUser = row.getAttribute('data-user') || '';
+          const rBook = row.getAttribute('data-book') || '';
+          const rStatus = row.getAttribute('data-status') || '';
+          const rType = row.getAttribute('data-type') || '';
+          const rRole = row.getAttribute('data-role') || '';
+          const rDate = row.getAttribute('data-date') || '';
+
+          const matchSearch = String(rUser).includes(searchVal) || String(rBook).includes(searchVal);
+          const matchStatus = statusVal === '' || rStatus === statusVal;
+          const matchType = typeVal === '' || rType === typeVal;
+          const matchRole = roleVal === '' || rRole === roleVal;
+          const matchDate = dateVal === '' || rDate === dateVal;
+
+          return matchSearch && matchStatus && matchType && matchRole && matchDate;
+        });
+
+        currentPage = 1;
+        updateView();
+      }
+
+      function updateView() {
+        // Ocultar todos primero
+        rows.forEach(r => r.style.display = 'none');
+
+        const total = filteredRows.length;
+        const totalPages = Math.ceil(total / itemsPerPage);
+        
+        // Boundaries
+        if (currentPage < 1) currentPage = 1;
+        if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
+
+        const startIdx = (currentPage - 1) * itemsPerPage;
+        const endIdx = startIdx + itemsPerPage;
+
+        // Mostrar solo los de esta página
+        const currentSlice = filteredRows.slice(startIdx, endIdx);
+        currentSlice.forEach(r => r.style.display = '');
+
+        // Actualizar Info y Botones
+        const actualStart = total === 0 ? 0 : startIdx + 1;
+        const actualEnd = Math.min(endIdx, total);
+        paginationInfo.textContent = `Mostrando ${actualStart} - ${actualEnd} de ${total} préstamos`;
+
+        prevPageBtn.disabled = currentPage <= 1;
+        nextPageBtn.disabled = currentPage >= totalPages || total === 0;
+      }
+
+      searchInput?.addEventListener('input', applyFilters);
+      statusFilter?.addEventListener('change', applyFilters);
+      typeFilter?.addEventListener('change', applyFilters);
+      roleFilter?.addEventListener('change', applyFilters);
+      dateFilter?.addEventListener('change', applyFilters);
+
+      prevPageBtn?.addEventListener('click', () => {
+        if (currentPage > 1) {
+          currentPage--;
+          updateView();
+        }
+      });
+      nextPageBtn?.addEventListener('click', () => {
+        const max = Math.ceil(filteredRows.length / itemsPerPage);
+        if (currentPage < max) {
+          currentPage++;
+          updateView();
+        }
+      });
+
+      // Init
+      applyFilters();
+    });
+  </script>
+</Layout>

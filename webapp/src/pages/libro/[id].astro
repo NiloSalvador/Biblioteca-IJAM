@@ -1,0 +1,116 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { supabaseServer } from '../../lib/supabaseServer';
+
+const { id } = Astro.params;
+const supabase = supabaseServer(Astro.cookies, Astro.request);
+const { data: { session } } = await supabase.auth.getSession();
+
+// Fetch book details
+const { data: book, error } = await supabase
+  .from('books')
+  .select('*')
+  .eq('id', id)
+  .single();
+
+if (!book || error) {
+  return Astro.redirect('/catalogo');
+}
+
+const isVirtual = book.type === 'VIRTUAL';
+---
+
+<Layout title={book.title}>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20">
+    <div class="mb-8 border-b border-ijam-surface-alt pb-6 flex items-start gap-3">
+      <a href="/catalogo" class="text-ijam-accent hover:brightness-110 transition-colors bg-ijam-accent/10 p-2 rounded-full mt-1">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+      </a>
+      <div>
+        <h1 class="text-3xl lg:text-4xl font-bold text-ijam-primary mb-2">{book.title}</h1>
+        <p class="text-ijam-text-muted font-medium text-lg">{book.author}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-10">
+      
+      <!-- Left Col: Cover -->
+      <div class="md:col-span-4 lg:col-span-3">
+        <div class="w-full aspect-[2/3] bg-ijam-surface rounded-xl overflow-hidden shadow-card border border-ijam-surface-alt relative mb-6">
+          {book.cover_url ? (
+            <img src={book.cover_url} alt={`Portada de ${book.title}`} class="w-full h-full object-cover" />
+          ) : (
+             <div class="w-full h-full flex items-center justify-center">
+               <span class="text-ijam-text-muted italic">Imagen no disponible</span>
+             </div>
+          )}
+
+          <div class="absolute top-4 left-4 bg-white/95 backdrop-blur-sm px-4 py-1.5 text-xs font-bold tracking-wide border border-ijam-surface-alt rounded-full shadow-sm">
+            {isVirtual ? (
+               <span class="text-ijam-accent flex items-center gap-1.5">Virtual</span>
+            ) : (
+               <span class="text-ijam-primary-deep flex items-center gap-1.5">Físico</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Col: Info & Actions -->
+      <div class="md:col-span-8 lg:col-span-9 flex flex-col">
+        <div class="mb-8">
+          <h3 class="text-sm font-semibold text-ijam-text-muted uppercase tracking-widest mb-3">Sinopsis & Detalles</h3>
+          <p class="text-ijam-text leading-relaxed text-lg font-light">
+            {book.description || 'No hay descripción disponible para esta obra en este momento.'}
+          </p>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-6 mb-10 border-y border-ijam-surface-alt py-6">
+          <div>
+            <span class="block text-xs font-semibold text-ijam-text-muted uppercase tracking-wider mb-1">Categoría</span>
+            <span class="font-medium text-ijam-primary">{book.category || 'N/A'}</span>
+          </div>
+          <div>
+            <span class="block text-xs font-semibold text-ijam-text-muted uppercase tracking-wider mb-1">Formato</span>
+            <span class="font-medium text-ijam-primary">{isVirtual ? 'E-Book (Web)' : 'Impreso'}</span>
+          </div>
+          <div>
+            <span class="block text-xs font-semibold text-ijam-text-muted uppercase tracking-wider mb-1">Stock Disponible</span>
+            <span class="font-medium text-ijam-primary">{book.available_stock > 1000 ? 'Ilimitado' : book.available_stock} unidades</span>
+          </div>
+        </div>
+
+        <!-- Action Area -->
+        <div class="bg-ijam-primary/5 border border-ijam-primary-deep/15 rounded-xl p-8 mt-auto">
+          <h3 class="text-xl font-bold text-ijam-primary mb-4">Adquirir Préstamo</h3>
+          <p class="text-ijam-text-muted mb-6 font-medium">
+            {isVirtual 
+              ? 'Los libros virtuales pueden prestarse por un lapso de 3 días para lectura online. No se permite descargas directas.' 
+              : 'Los libros físicos deben requerirse en plataforma y ser retirados en el campus en un plazo de 24 horas.'}
+          </p>
+
+          {session ? (
+             <form action={`/api/loans/request`} method="POST">
+               <input type="hidden" name="book_id" value={book.id} />
+               <input type="hidden" name="user_id" value={session.user.id} />
+               <input type="hidden" name="type" value={book.type} />
+               <button type="submit" class="bg-ijam-accent hover:brightness-110 text-ijam-primary font-bold py-3.5 px-8 rounded-lg shadow-md shadow-ijam-accent/20 hover:shadow-lg hover:shadow-ijam-accent/30 transition-all flex items-center gap-2 hover:-translate-y-0.5">
+                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                 {isVirtual ? 'Solicitar Acceso Virtual' : 'Reservar Copia Física'}
+               </button>
+             </form>
+          ) : (
+            <div class="flex flex-col sm:flex-row gap-4 items-center bg-white p-4 rounded-lg border border-ijam-surface-alt">
+              <span class="text-ijam-text-muted text-sm font-medium">Debe iniciar sesión para solicitar este material.</span>
+              <a href="/login" class="bg-ijam-primary text-white font-semibold py-2 px-6 rounded-lg hover:bg-ijam-primary-deep transition-colors text-sm">
+                Ir a Iniciar Sesión
+              </a>
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  </div>
+</Layout>

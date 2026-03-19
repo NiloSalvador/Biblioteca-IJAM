@@ -1,0 +1,189 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { supabaseServer } from '../lib/supabaseServer';
+
+const supabase = supabaseServer(Astro.cookies, Astro.request);
+
+// 1. Validar Sesión
+const { data: { session } } = await supabase.auth.getSession();
+if (!session) {
+  return Astro.redirect('/login');
+}
+
+// 2. Traer Préstamos del Usuario
+const { data: loans, error } = await supabase
+  .from('loans')
+  .select(`
+    id,
+    loan_date,
+    due_date,
+    status,
+    book_id,
+    books (
+      title,
+      author,
+      type,
+      cover_url
+    )
+  `)
+  .eq('user_id', session.user.id)
+  .order('loan_date', { ascending: false });
+
+const activeLoans = loans?.filter(l => l.status === 'ACTIVE' || l.status === 'RESERVED') || [];
+const pastLoans = loans?.filter(l => l.status === 'RETURNED' || l.status === 'OVERDUE') || [];
+
+// Mensajes flash
+const { url } = Astro;
+const successMsg = url.searchParams.get('msg');
+const errorMsg = url.searchParams.get('error');
+
+function getDaysLeft(dueDateString: string) {
+  const due = new Date(dueDateString);
+  const now = new Date();
+  const diffTime = due.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+}
+
+---
+
+<Layout title="Mis Préstamos">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20">
+    <div class="mb-10">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-1.5 h-8 bg-gradient-to-b from-ijam-accent to-ijam-accent-soft rounded-full"></div>
+        <h1 class="text-3xl font-bold text-ijam-primary">Mis Lecturas Activas</h1>
+      </div>
+      <p class="text-ijam-text-muted font-medium ml-5">Gestiona tus libros virtuales en curso y tus reservas de campus.</p>
+    </div>
+
+    {successMsg && (
+      <div class="bg-emerald-50 border-l-4 border-ijam-success text-emerald-700 p-4 mb-8 text-sm flex gap-2 items-center rounded-r-md">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        {successMsg}
+      </div>
+    )}
+
+    {errorMsg && (
+      <div class="bg-red-50 border-l-4 border-ijam-danger text-red-700 p-4 mb-8 text-sm flex gap-2 items-center rounded-r-md">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+        {errorMsg}
+      </div>
+    )}
+
+    <div class="space-y-12">
+      
+      <section>
+        <h2 class="text-xl font-bold text-ijam-primary mb-6 flex items-center gap-2 border-b border-ijam-surface-alt pb-3">
+          <svg class="w-5 h-5 text-ijam-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          En Curso
+        </h2>
+
+        {activeLoans.length === 0 ? (
+          <div class="bg-white border border-ijam-surface-alt rounded-xl p-10 text-center shadow-card">
+            <p class="text-ijam-text-muted mb-4 block">No tienes préstamos ni reservas activas en este momento.</p>
+            <a href="/catalogo" class="text-ijam-accent font-semibold hover:underline inline-flex items-center gap-1">
+              Explorar el catálogo
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+            </a>
+          </div>
+        ) : (
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {activeLoans.map((loan) => {
+               const daysLeft = loan.due_date ? getDaysLeft(loan.due_date) : 0;
+               const book = Array.isArray(loan.books) ? loan.books[0] : loan.books;
+               const isVirtual = book?.type === 'VIRTUAL';
+               const isExpiringSoon = daysLeft <= 1;
+
+               return (
+                 <div class="bg-white border border-ijam-surface-alt rounded-xl p-5 shadow-card flex gap-5 items-start card-hover transition-base">
+                   <div class="w-24 h-36 bg-ijam-surface rounded-lg overflow-hidden shrink-0 border border-ijam-surface-alt relative">
+                     {book?.cover_url ? (
+                       <img src={book.cover_url} alt={book?.title} class="w-full h-full object-cover" />
+                     ) : (
+                       <div class="w-full h-full flex items-center justify-center text-xs text-ijam-text-muted p-2 text-center">Sin portada</div>
+                     )}
+                   </div>
+                   <div class="flex-1 flex flex-col h-full min-h-[144px]">
+                     <span class="text-xs font-semibold text-ijam-accent tracking-wider uppercase mb-1">{isVirtual ? 'E-Book' : 'Reserva Física'}</span>
+                     <h3 class="font-bold text-ijam-primary leading-tight mb-1 text-base">{book?.title}</h3>
+                     <p class="text-sm text-ijam-text-muted mb-4">{book?.author}</p>
+                     
+                     <div class="mt-auto flex flex-col gap-3">
+                       <div class="flex items-center gap-2">
+                         {daysLeft > 0 ? (
+                           <span class={`text-xs font-medium px-2.5 py-1 rounded-full ${isExpiringSoon ? 'bg-orange-100 text-orange-700' : 'bg-ijam-accent/10 text-ijam-accent'}`}>
+                             Quedan {daysLeft} días
+                           </span>
+                         ) : (
+                           <span class="text-xs font-medium px-2.5 py-1 rounded-full bg-red-100 text-red-700">
+                             Expirado
+                           </span>
+                         )}
+                       </div>
+                       
+                       {isVirtual && daysLeft > 0 ? (
+                         <a href={`/visor/${loan.id}`} class="w-full mt-1 text-center bg-ijam-accent hover:brightness-110 text-ijam-primary text-sm font-semibold py-2.5 px-4 rounded-lg transition-all shadow-sm shadow-ijam-accent/15 hover:shadow-md hover:shadow-ijam-accent/25 flex justify-center items-center gap-2">
+                           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                           Leer Ahora
+                         </a>
+                       ) : !isVirtual && loan.status === 'RESERVED' ? (
+                         <div class="w-full mt-1 text-center border border-dashed border-ijam-surface-alt bg-ijam-surface text-ijam-text-muted text-sm font-medium py-2 px-4 rounded-lg">
+                           Pendiente retiro en campus
+                         </div>
+                       ) : null}
+                     </div>
+                   </div>
+                 </div>
+             )
+           })}
+          </div>
+        )}
+      </section>
+
+      {pastLoans.length > 0 && (
+        <section>
+          <h2 class="text-lg font-bold text-ijam-primary mb-6 flex items-center gap-2 border-b border-ijam-surface-alt pb-3">
+            <svg class="w-5 h-5 text-ijam-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+            Historial de Lectura
+          </h2>
+          <div class="bg-white border border-ijam-surface-alt rounded-xl overflow-hidden shadow-card">
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm text-left">
+                <thead class="text-xs text-ijam-text-muted uppercase bg-ijam-surface border-b border-ijam-surface-alt">
+                  <tr>
+                    <th scope="col" class="px-6 py-3.5 font-semibold">Obra</th>
+                    <th scope="col" class="px-6 py-3.5 font-semibold">Tipo</th>
+                    <th scope="col" class="px-6 py-3.5 font-semibold">Fecha de Préstamo</th>
+                    <th scope="col" class="px-6 py-3.5 font-semibold">Estado Final</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pastLoans.map((loan) => {
+                    const b = Array.isArray(loan.books) ? loan.books[0] : loan.books;
+                    return (
+                    <tr class="bg-white border-b border-ijam-surface last:border-0 hover:bg-ijam-surface">
+                      <td class="px-6 py-4 font-medium text-ijam-primary">
+                         <a href={`/libro/${loan.book_id}`} class="hover:text-ijam-accent hover:underline transition-colors">{b?.title}</a>
+                      </td>
+                      <td class="px-6 py-4 text-ijam-text-muted">{b?.type === 'VIRTUAL' ? 'Digital' : 'Físico'}</td>
+                      <td class="px-6 py-4 text-ijam-text-muted">{new Date(loan.loan_date).toLocaleDateString('es-ES')}</td>
+                      <td class="px-6 py-4">
+                        {loan.status === 'RETURNED' ? (
+                          <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-ijam-surface text-ijam-text-muted">Devuelto</span>
+                        ) : (
+                          <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-50 text-ijam-danger">Vencido</span>
+                        )}
+                      </td>
+                    </tr>
+                  )})}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
+
+    </div>
+  </div>
+</Layout>

@@ -1,0 +1,248 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { supabaseServer } from '../lib/supabaseServer';
+import { User, Lock, Mail, Shield, Calendar, Book, Clock, CheckCircle } from 'lucide-react';
+
+const supabase = supabaseServer(Astro.cookies, Astro.request);
+
+// 1. Verificación de sesión
+const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+if (sessionError || !session) {
+  return Astro.redirect('/login');
+}
+
+// 2. Obtener datos del usuario desde public.users
+const { data: userProfile, error: profileError } = await supabase
+  .from('users')
+  .select('*')
+  .eq('id', session.user.id)
+  .single();
+
+if (profileError || !userProfile) {
+  // Manejo de error crítico (no debería pasar por el trigger)
+  return Astro.redirect('/login?error=Perfil+no+encontrado');
+}
+
+// 3. Obtener estadísticas de préstamos del usuario
+const { data: userLoans, error: loansError } = await supabase
+  .from('loans')
+  .select('status')
+  .eq('user_id', session.user.id);
+
+let totalLoans = 0;
+let activeLoans = 0;
+let readBooks = 0;
+
+if (userLoans && !loansError) {
+  totalLoans = userLoans.length;
+  activeLoans = userLoans.filter(l => l.status === 'ACTIVE' || l.status === 'OVERDUE').length;
+  readBooks = userLoans.filter(l => l.status === 'RETURNED').length;
+}
+
+// Generar iniciales para el avatar
+const getInitials = (name: string) => {
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+};
+
+const initials = getInitials(userProfile.full_name || 'User');
+const roleBadgeColor = userProfile.role === 'ADMIN' 
+  ? 'bg-ijam-danger/10 text-ijam-danger' 
+  : 'bg-ijam-accent/10 text-ijam-accent';
+
+// Capturar parámetros de la URL para mensajes
+const error = Astro.url.searchParams.get('error');
+const msg = Astro.url.searchParams.get('msg');
+
+const formattedDate = new Date(userProfile.created_at).toLocaleDateString('es-ES', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric'
+});
+---
+
+<Layout title="Mi Perfil | Biblioteca IJAM">
+  <section class="min-h-[calc(100vh-64px)] bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-2xl mx-auto">
+      
+      {/* Mensajes de feedback */}
+      {error && (
+        <div class="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-md flex items-start">
+          <svg class="h-5 w-5 text-red-400 mt-0.5 mr-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+          </svg>
+          <p class="text-sm text-red-700 m-0">{error}</p>
+        </div>
+      )}
+      
+      {msg && (
+        <div class="mb-6 p-4 bg-emerald-50 border-l-4 border-emerald-500 rounded-r-md flex items-start">
+          <svg class="h-5 w-5 text-emerald-400 mt-0.5 mr-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+          </svg>
+          <p class="text-sm text-emerald-700 m-0">{msg}</p>
+        </div>
+      )}
+
+      <!-- Header Profile Card -->
+      <div class="bg-white rounded-2xl shadow-card overflow-hidden mb-6">
+        <div class="h-32 gradient-primary w-full relative"></div>
+        <div class="px-8 pb-8 flex flex-col items-center">
+          
+          <!-- Avatar -->
+          <div class="w-24 h-24 rounded-full gradient-primary text-white flex items-center justify-center text-3xl font-bold shadow-lg border-4 border-white -mt-12 mb-4 relative z-10">
+            {initials}
+          </div>
+          
+          <h1 class="text-2xl font-bold text-ijam-primary text-center mb-1">{userProfile.full_name}</h1>
+          <p class="text-ijam-text-muted flex items-center justify-center gap-2 text-sm mb-4">
+            <Mail className="w-4 h-4" />
+            {userProfile.institutional_email}
+          </p>
+          
+          <div class="flex items-center gap-3">
+            <span class={`px-3 py-1 rounded-full text-xs font-bold tracking-wider ${roleBadgeColor} shadow-sm border border-current/20`}>
+              {userProfile.role === 'ADMIN' ? 'ADMINISTRADOR' : 'ESTUDIANTE'}
+            </span>
+            <span class="text-xs text-ijam-text-muted flex items-center gap-1 bg-ijam-surface px-3 py-1 rounded-full border border-ijam-surface-alt">
+              <Calendar className="w-3.5 h-3.5" />
+              Miembro desde {formattedDate}
+            </span>
+          </div>
+        </div>
+        
+        <!-- Estadísticas Rápidas -->
+        <div class="grid grid-cols-3 border-t border-[#E2E8F0] divide-x divide-[#E2E8F0] bg-ijam-surface/30">
+          <div class="p-6 text-center hover:bg-white transition-colors">
+            <div class="text-2xl font-bold text-ijam-primary mb-1 flex justify-center items-center gap-2">
+              <Book className="w-5 h-5 text-ijam-accent" />
+              {totalLoans}
+            </div>
+            <div class="text-xs font-medium text-ijam-text-muted uppercase tracking-wide">Total Préstamos</div>
+          </div>
+          <div class="p-6 text-center hover:bg-white transition-colors">
+            <div class="text-2xl font-bold text-ijam-primary mb-1 flex justify-center items-center gap-2">
+              <Clock className="w-5 h-5 text-ijam-success" />
+              {activeLoans}
+            </div>
+            <div class="text-xs font-medium text-ijam-text-muted uppercase tracking-wide">Activos</div>
+          </div>
+          <div class="p-6 text-center hover:bg-white transition-colors">
+            <div class="text-2xl font-bold text-ijam-primary mb-1 flex justify-center items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-ijam-info" />
+              {readBooks}
+            </div>
+            <div class="text-xs font-medium text-ijam-text-muted uppercase tracking-wide">Completados</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings Forms -->
+      <div class="space-y-6">
+        
+        <!-- Mis Datos -->
+        <div class="bg-white rounded-2xl shadow-card border border-ijam-surface-alt overflow-hidden">
+          <div class="border-b border-ijam-surface-alt px-6 py-4 bg-ijam-surface/50 flex items-center gap-3">
+            <User className="w-5 h-5 text-ijam-secondary" />
+            <h2 class="text-lg font-bold text-ijam-primary">Mis Datos</h2>
+          </div>
+          <div class="p-6">
+            <form action="/api/user/update-profile" method="POST" class="space-y-4">
+              <div>
+                <label for="full_name" class="block text-sm font-semibold text-ijam-primary mb-2">Nombre Completo</label>
+                <input 
+                  type="text" 
+                  id="full_name" 
+                  name="full_name" 
+                  value={userProfile.full_name} 
+                  required
+                  class="block w-full px-4 py-2.5 bg-white border border-[#E2E8F0] rounded-[var(--radius-md)] focus:ring-2 focus:ring-ijam-accent/30 focus:border-ijam-accent transition-all text-ijam-text text-sm"
+                />
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-semibold text-ijam-primary mb-2">Correo Institucional <span class="text-xs font-normal text-ijam-text-muted">(No editable)</span></label>
+                  <input 
+                    type="email" 
+                    value={userProfile.institutional_email} 
+                    disabled
+                    class="block w-full px-4 py-2.5 bg-ijam-surface border border-[#E2E8F0] rounded-[var(--radius-md)] text-ijam-text-muted text-sm cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-semibold text-ijam-primary mb-2">Rol <span class="text-xs font-normal text-ijam-text-muted">(No editable)</span></label>
+                  <input 
+                    type="text" 
+                    value={userProfile.role} 
+                    disabled
+                    class="block w-full px-4 py-2.5 bg-ijam-surface border border-[#E2E8F0] rounded-[var(--radius-md)] text-ijam-text-muted text-sm cursor-not-allowed"
+                  />
+                </div>
+              </div>
+              <div class="pt-4 flex justify-end">
+                <button type="submit" class="px-6 py-2.5 text-sm font-bold text-white bg-ijam-primary hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ijam-primary rounded-[var(--radius-md)] transition-all shadow-sm">
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Cambiar Contraseña -->
+        <div class="bg-white rounded-2xl shadow-card border border-ijam-surface-alt overflow-hidden">
+          <div class="border-b border-ijam-surface-alt px-6 py-4 bg-ijam-surface/50 flex items-center gap-3">
+            <Lock className="w-5 h-5 text-ijam-secondary" />
+            <h2 class="text-lg font-bold text-ijam-primary">Seguridad y Contraseña</h2>
+          </div>
+          <div class="p-6">
+            <form action="/api/user/change-password" method="POST" class="space-y-4">
+              <div>
+                <label for="currentPassword" class="block text-sm font-semibold text-ijam-primary mb-2">Contraseña Actual</label>
+                <input 
+                  type="password" 
+                  id="currentPassword" 
+                  name="currentPassword" 
+                  required
+                  class="block w-full px-4 py-2.5 bg-white border border-[#E2E8F0] rounded-[var(--radius-md)] focus:ring-2 focus:ring-ijam-accent/30 focus:border-ijam-accent transition-all text-ijam-text text-sm"
+                />
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label for="newPassword" class="block text-sm font-semibold text-ijam-primary mb-2">Nueva Contraseña</label>
+                  <input 
+                    type="password" 
+                    id="newPassword" 
+                    name="newPassword" 
+                    required
+                    minlength="6"
+                    class="block w-full px-4 py-2.5 bg-white border border-[#E2E8F0] rounded-[var(--radius-md)] focus:ring-2 focus:ring-ijam-accent/30 focus:border-ijam-accent transition-all text-ijam-text text-sm"
+                  />
+                </div>
+                <div>
+                  <label for="confirmPassword" class="block text-sm font-semibold text-ijam-primary mb-2">Confirmar Nueva Contraseña</label>
+                  <input 
+                    type="password" 
+                    id="confirmPassword" 
+                    name="confirmPassword" 
+                    required
+                    minlength="6"
+                    class="block w-full px-4 py-2.5 bg-white border border-[#E2E8F0] rounded-[var(--radius-md)] focus:ring-2 focus:ring-ijam-accent/30 focus:border-ijam-accent transition-all text-ijam-text text-sm"
+                  />
+                </div>
+              </div>
+              <div class="pt-4 flex justify-end">
+                <button type="submit" class="px-6 py-2.5 text-sm font-bold text-ijam-primary bg-ijam-accent hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ijam-accent rounded-[var(--radius-md)] transition-all shadow-sm">
+                  Cambiar Contraseña
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+</Layout>

@@ -1,0 +1,253 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { supabaseServer } from '../../lib/supabaseServer';
+import { Users, UserCheck } from 'lucide-react';
+
+const supabase = supabaseServer(Astro.cookies, Astro.request);
+
+// 1. Validar Sesión y Rol de Admin
+const { data: { session } } = await supabase.auth.getSession();
+if (!session) {
+  return Astro.redirect('/login');
+}
+
+const { data: profile } = await supabase.from('users').select('role').eq('id', session.user.id).single();
+if (profile?.role !== 'ADMIN') {
+  return Astro.redirect('/catalogo');
+}
+
+// 2. Traer Usuarios
+const { data: users, error } = await supabase
+  .from('users')
+  .select('*')
+  .order('created_at', { ascending: false });
+
+const allUsers = users || [];
+
+// Calcular contadores
+const totalUsers = allUsers.length;
+const studentCount = allUsers.filter(u => u.role === 'STUDENT').length;
+const teacherCount = allUsers.filter(u => u.role === 'TEACHER').length;
+const staffCount = allUsers.filter(u => u.role === 'STAFF').length;
+
+// Formatear fecha
+const formatDate = (dateString: string) => {
+  if (!dateString) return '—';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+---
+
+<Layout title="Gestión de Usuarios | Admin">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20 animate-fade-in">
+    <!-- Encabezado -->
+    <div class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-ijam-surface-alt pb-6">
+      <div>
+        <div class="flex items-center gap-3 mb-3">
+          <span class="bg-ijam-accent/15 text-ijam-accent text-xs font-bold px-3 py-1.5 rounded-full tracking-widest uppercase border border-ijam-accent/25">
+            Administración
+          </span>
+        </div>
+        <h1 class="text-3xl font-bold text-ijam-primary flex items-center gap-3">
+          <Users className="w-8 h-8 text-ijam-accent" />
+          Directorio de Usuarios
+        </h1>
+        <p class="text-ijam-text-muted font-medium mt-2">Gestiona los estudiantes, docentes y personal del sistema.</p>
+      </div>
+    </div>
+
+    <!-- Contadores -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8 animate-stagger">
+      <div class="bg-white border-y border-r border-[#E2E8F0] border-l-4 border-l-ijam-primary rounded-xl p-6 shadow-card flex items-center justify-between card-hover transition-base">
+        <div>
+          <p class="text-sm font-medium text-ijam-text-muted mb-1">Total Usuarios</p>
+          <p class="text-3xl font-bold text-ijam-primary">{totalUsers}</p>
+        </div>
+        <div class="w-12 h-12 bg-ijam-surface text-ijam-primary rounded-xl flex items-center justify-center">
+          <Users className="w-6 h-6" />
+        </div>
+      </div>
+      
+      <div class="bg-white border-y border-r border-[#E2E8F0] border-l-4 border-l-ijam-success rounded-xl p-6 shadow-card flex items-center justify-between card-hover transition-base">
+        <div>
+          <p class="text-sm font-medium text-ijam-text-muted mb-1">Estudiantes</p>
+          <p class="text-3xl font-bold text-ijam-primary">{studentCount}</p>
+        </div>
+        <div class="w-12 h-12 bg-ijam-success/10 text-ijam-success rounded-xl flex items-center justify-center">
+          <UserCheck className="w-6 h-6" />
+        </div>
+      </div>
+
+      <div class="bg-white border-y border-r border-[#E2E8F0] border-l-4 border-l-ijam-info rounded-xl p-6 shadow-card flex items-center justify-between card-hover transition-base">
+        <div>
+          <p class="text-sm font-medium text-ijam-text-muted mb-1">Docentes</p>
+          <p class="text-3xl font-bold text-ijam-primary">{teacherCount}</p>
+        </div>
+        <div class="w-12 h-12 bg-ijam-info/10 text-ijam-info rounded-xl flex items-center justify-center">
+          <UserCheck className="w-6 h-6" />
+        </div>
+      </div>
+
+      <div class="bg-white border-y border-r border-[#E2E8F0] border-l-4 border-l-ijam-warning rounded-xl p-6 shadow-card flex items-center justify-between card-hover transition-base">
+        <div>
+          <p class="text-sm font-medium text-ijam-text-muted mb-1">Administrativos</p>
+          <p class="text-3xl font-bold text-ijam-primary">{staffCount}</p>
+        </div>
+        <div class="w-12 h-12 bg-ijam-warning/10 text-ijam-warning rounded-xl flex items-center justify-center">
+          <UserCheck className="w-6 h-6" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Filtros y Búsqueda -->
+    <div class="bg-white border border-[#E2E8F0] rounded-xl p-4 shadow-sm mb-6 flex flex-col md:flex-row gap-4 justify-between items-center">
+      <div class="relative w-full md:w-96">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+           <svg class="h-5 w-5 text-ijam-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        </div>
+        <input 
+          type="text" 
+          id="searchInput" 
+          placeholder="Buscar por nombre o correo..." 
+          class="block w-full pl-10 pr-4 py-2 bg-ijam-surface border border-ijam-surface-alt rounded-lg focus:ring-2 focus:ring-ijam-accent/50 focus:border-ijam-accent transition-all text-sm text-ijam-text"
+        />
+      </div>
+
+      <div class="flex flex-wrap gap-2 w-full md:w-auto" id="roleFilters">
+        <button class="filter-btn active px-4 py-2 text-sm font-semibold rounded-lg bg-ijam-primary text-white transition-colors" data-role="ALL">Todos</button>
+        <button class="filter-btn px-4 py-2 text-sm font-semibold rounded-lg bg-ijam-surface text-ijam-text-muted hover:bg-ijam-surface-alt transition-colors" data-role="STUDENT">Estudiantes</button>
+        <button class="filter-btn px-4 py-2 text-sm font-semibold rounded-lg bg-ijam-surface text-ijam-text-muted hover:bg-ijam-surface-alt transition-colors" data-role="TEACHER">Docentes</button>
+        <button class="filter-btn px-4 py-2 text-sm font-semibold rounded-lg bg-ijam-surface text-ijam-text-muted hover:bg-ijam-surface-alt transition-colors" data-role="STAFF">Administrativos</button>
+      </div>
+    </div>
+
+    <!-- Tabla de Usuarios -->
+    <div class="bg-white border border-[#E2E8F0] rounded-xl shadow-card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead class="text-xs text-ijam-text uppercase bg-[#F1F5F9] border-b border-[#E2E8F0]">
+            <tr>
+              <th scope="col" class="px-6 py-4 font-bold">Nombre del Usuario</th>
+              <th scope="col" class="px-6 py-4 font-bold">Correo Institucional</th>
+              <th scope="col" class="px-6 py-4 font-bold">Rol en el Sistema</th>
+              <th scope="col" class="px-6 py-4 font-bold">Registro</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            {allUsers.map((user) => (
+              <tr class="user-row bg-white border-b border-[#E2E8F0] hover:bg-[#F1F5F9] transition-colors" data-role={user.role} data-name={user.full_name?.toLowerCase()} data-email={user.institutional_email?.toLowerCase()}>
+                <td class="px-6 py-4">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-ijam-surface text-ijam-primary font-bold flex items-center justify-center shrink-0">
+                      {user.full_name ? user.full_name.charAt(0).toUpperCase() : '?'}
+                    </div>
+                    <span class="font-bold text-ijam-primary">{user.full_name || 'Sin Nombre'}</span>
+                  </div>
+                </td>
+                <td class="px-6 py-4 text-ijam-text-muted">
+                  {user.institutional_email}
+                </td>
+                <td class="px-6 py-4">
+                  {user.role === 'STUDENT' ? (
+                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20">
+                       Estudiante
+                     </span>
+                  ) : user.role === 'TEACHER' ? (
+                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/20">
+                       Docente
+                     </span>
+                  ) : user.role === 'STAFF' ? (
+                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#F59E0B]/10 text-[#F59E0B] border border-[#F59E0B]/20">
+                       Administrativo
+                     </span>
+                  ) : (
+                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-[#02f1e4]/10 text-ijam-primary border border-ijam-accent/30 tracking-wide">
+                       Administrador
+                     </span>
+                  )}
+                </td>
+                <td class="px-6 py-4 text-ijam-text-muted whitespace-nowrap">
+                  {formatDate(user.created_at)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        
+        {allUsers.length === 0 && (
+          <div class="p-12 text-center text-ijam-text-muted flex flex-col items-center justify-center">
+            <Users className="w-12 h-12 text-ijam-surface-alt mb-3" />
+            <p>No se encontraron usuarios en el sistema.</p>
+          </div>
+        )}
+        
+        <div id="noResults" class="p-12 text-center text-ijam-text-muted flex-col items-center justify-center hidden">
+          <svg class="w-12 h-12 text-ijam-surface-alt mb-3 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <p>No hay resultados que coincidan con tu búsqueda.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('searchInput') as HTMLInputElement;
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    const rows = document.querySelectorAll('.user-row');
+    const noResults = document.getElementById('noResults');
+    let currentRole = 'ALL';
+
+    function filterTable() {
+      const searchTerm = (searchInput?.value || '').toLowerCase();
+      let visibleCount = 0;
+
+      rows.forEach((row) => {
+        const r = row as HTMLElement;
+        const role = r.getAttribute('data-role');
+        const name = r.getAttribute('data-name') || '';
+        const email = r.getAttribute('data-email') || '';
+
+        const matchesRole = currentRole === 'ALL' || role === currentRole;
+        const matchesSearch = name.includes(searchTerm) || email.includes(searchTerm);
+
+        if (matchesRole && matchesSearch) {
+          r.style.display = '';
+          visibleCount++;
+        } else {
+          r.style.display = 'none';
+        }
+      });
+
+      if (noResults) {
+        if (visibleCount === 0 && rows.length > 0) {
+          noResults.classList.remove('hidden');
+          noResults.classList.add('flex');
+        } else {
+          noResults.classList.add('hidden');
+          noResults.classList.remove('flex');
+        }
+      }
+    }
+
+    searchInput?.addEventListener('input', filterTable);
+
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        // Remove active styling from all
+        filterBtns.forEach(b => {
+          b.classList.remove('bg-ijam-primary', 'text-white');
+          b.classList.add('bg-ijam-surface', 'text-ijam-text-muted');
+        });
+
+        // Add active styling to clicked
+        const target = e.currentTarget as HTMLElement;
+        target.classList.remove('bg-ijam-surface', 'text-ijam-text-muted');
+        target.classList.add('bg-ijam-primary', 'text-white');
+
+        currentRole = target.getAttribute('data-role') || 'ALL';
+        filterTable();
+      });
+    });
+  });
+</script>

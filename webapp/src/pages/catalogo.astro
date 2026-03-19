@@ -1,0 +1,33 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { supabaseServer } from '../lib/supabaseServer';
+import BookCatalog from '../components/BookCatalog';
+
+const supabase = supabaseServer(Astro.cookies, Astro.request);
+const { data: { session } } = await supabase.auth.getSession();
+
+// Fetching books from Supabase
+const { data: books, error } = await supabase
+  .from('books')
+  .select('*')
+  .order('created_at', { ascending: false });
+
+// Passing books to the catalog component
+const displayBooks = books || [];
+---
+
+<Layout title="Catálogo de Biblioteca">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-20">
+    <div class="mb-10">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="w-1.5 h-8 bg-gradient-to-b from-ijam-accent to-ijam-accent-soft rounded-full"></div>
+        <h1 class="text-3xl md:text-4xl font-bold text-ijam-primary">Catálogo General</h1>
+      </div>
+      <p class="text-ijam-text-muted font-light text-lg ml-5">
+        Explora nuestra colección completa de literatura y recursos académicos.
+      </p>
+    </div>
+
+    <BookCatalog initialBooks={displayBooks} client:load />
+  </div>
+</Layout>

@@ -1,0 +1,37 @@
+---
+import '../styles/global.css';
+import Navbar from '../components/Navbar.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+	title: string;
+	description?: string;
+}
+
+const { title, description = "Biblioteca Virtual Institucional John A. Mackay. Un espacio premium de lectura digital y física." } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es" class="scroll-smooth selection:bg-ijam-accent/20 selection:text-ijam-primary">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="description" content={description} />
+		<meta name="viewport" content="width=device-width" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="generator" content={Astro.generator} />
+    
+    <!-- Fuente oficial IJAM: Plus Jakarta Sans (DESIGN_SYSTEM.md Sección 4) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+		<title>{title} | Biblioteca IJAM</title>
+	</head>
+	<body class="font-sans bg-ijam-surface text-ijam-text antialiased">
+    <Navbar />
+    <main class="min-h-screen">
+      <slot />
+    </main>
+    <Footer />
+	</body>
+</html>

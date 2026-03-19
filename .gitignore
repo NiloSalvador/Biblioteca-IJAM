@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.astro/
+.vercel/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# AI agent config (local)
+.agent/
+.agents/
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Misc
+resumen_proyecto.md.resolved
+skills-lock.json
+package-lock.json
