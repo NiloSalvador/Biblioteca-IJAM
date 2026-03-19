@@ -5,7 +5,11 @@ import vercel from '@astrojs/vercel';
 
 // https://astro.build/config
 export default defineConfig({
+  site: 'https://biblioteca-ijam.vercel.app',
   output: 'server',
+  security: {
+    checkOrigin: true,
+  },
   adapter: vercel(),
   integrations: [react()],
   vite: {
