@@ -8,7 +8,7 @@ export default defineConfig({
   site: 'https://biblioteca-ijam.vercel.app',
   output: 'server',
   security: {
-    checkOrigin: true,
+    checkOrigin: false,
   },
   adapter: vercel(),
   integrations: [react()],
